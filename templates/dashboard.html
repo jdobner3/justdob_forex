@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forex Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:         #080c10;
+    --surface:    #0d1117;
+    --surface2:   #131920;
+    --border:     #1e2d3d;
+    --border2:    #243447;
+    --text:       #cdd9e5;
+    --muted:      #6e8099;
+    --accent:     #00d4aa;
+    --accent2:    #0099ff;
+    --buy:        #00d4aa;
+    --sell:       #ff4d6d;
+    --warn:       #f4a72a;
+    --prime:      #a78bfa;
+    --mono:       'Share Tech Mono', monospace;
+    --sans:       'Barlow', sans-serif;
+    --cond:       'Barlow Condensed', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  }
+
+  .logo-text {
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #fff;
+  }
+
+  .logo-text span {
+    color: var(--accent);
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .utc-clock {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .utc-clock span {
+    color: var(--accent);
+  }
+
+  /* ── Layout ── */
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 20px;
+  }
+
+  .main-col { display: flex; flex-direction: column; gap: 20px; }
+  .side-col  { display: flex; flex-direction: column; gap: 20px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface2);
+  }
+
+  .card-title {
+    font-family: var(--cond);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .card-body { padding: 20px; }
+
+  /* ── Session Bar ── */
+  .session-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .session-sessions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .session-pill {
+    font-family: var(--cond);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border2);
+    color: var(--muted);
+    background: var(--surface2);
+    transition: all 0.3s;
+  }
+
+  .session-pill.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,212,170,0.08);
+    box-shadow: 0 0 12px rgba(0,212,170,0.15);
+  }
+
+  .session-pill.overlap {
+    border-color: var(--prime);
+    color: var(--prime);
+    background: rgba(167,139,250,0.08);
+    box-shadow: 0 0 12px rgba(167,139,250,0.2);
+    animation: pulse-prime 2s infinite;
+  }
+
+  @keyframes pulse-prime {
+    0%, 100% { box-shadow: 0 0 12px rgba(167,139,250,0.2); }
+    50%       { box-shadow: 0 0 24px rgba(167,139,250,0.4); }
+  }
+
+  .session-tip {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .session-tip.prime  { color: var(--prime); }
+  .session-tip.good   { color: var(--accent); }
+  .session-tip.quiet  { color: var(--sell); }
+
+  .session-next {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  /* ── Scan Controls ── */
+  .scan-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    font-family: var(--cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 10px 24px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #000;
+  }
+
+  .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .scan-status {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .scan-status .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    background: var(--muted);
+  }
+
+  .scan-status.scanning .dot {
+    background: var(--warn);
+    animation: blink 0.8s infinite;
+  }
+
+  .scan-status.idle .dot { background: var(--accent); }
+  .scan-status.error .dot { background: var(--sell); }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.2; }
+  }
+
+  .next-scan {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+
+  /* ── Setup Cards ── */
+  .setups-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+  }
+
+  .setup-card {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+    animation: fadeIn 0.4s ease forwards;
+  }
+
+  .setup-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .setup-card.buy  { border-top: 3px solid var(--buy); }
+  .setup-card.sell { border-top: 3px solid var(--sell); }
+
+  .setup-head {
+    padding: 14px 16px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .setup-pair {
+    font-family: var(--cond);
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 1px;
+  }
+
+  .setup-dir {
+    font-family: var(--cond);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    padding: 4px 12px;
+    border-radius: 4px;
+  }
+
+  .setup-dir.buy  { background: rgba(0,212,170,0.15); color: var(--buy); }
+  .setup-dir.sell { background: rgba(255,77,109,0.15); color: var(--sell); }
+
+  .setup-body { padding: 0 16px 16px; }
+
+  .setup-pattern {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .strength-badge {
+    font-family: var(--cond);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: rgba(244,167,42,0.15);
+    color: var(--warn);
+  }
+
+  .strength-badge.strong {
+    background: rgba(0,212,170,0.15);
+    color: var(--accent);
+  }
+
+  .setup-levels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .level-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+
+  .level-label {
+    font-family: var(--cond);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .level-price {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: #fff;
+  }
+
+  .level-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .setup-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .grade-badge {
+    font-family: var(--cond);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+  }
+
+  .grade-Aplus { background: rgba(167,139,250,0.2); color: var(--prime); }
+  .grade-A     { background: rgba(0,212,170,0.15);  color: var(--accent); }
+  .grade-B     { background: rgba(0,153,255,0.15);  color: var(--accent2); }
+  .grade-C     { background: rgba(244,167,42,0.15); color: var(--warn); }
+  .grade-D     { background: rgba(255,77,109,0.15); color: var(--sell); }
+
+  .rr-label {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .rr-label span {
+    color: var(--accent);
+    font-weight: bold;
+  }
+
+  .score-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+
+  .score-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    transition: width 0.6s ease;
+  }
+
+  /* ── No Setups ── */
+  .no-setups {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+
+  .no-setups .icon { font-size: 40px; margin-bottom: 16px; }
+
+  .no-setups h3 {
+    font-family: var(--cond);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .no-setups p { font-size: 13px; line-height: 1.6; max-width: 320px; margin: 0 auto; }
+
+  /* ── History Table ── */
+  .history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .history-table th {
+    font-family: var(--cond);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .history-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    color: var(--text);
+  }
+
+  .history-table tr:last-child td { border-bottom: none; }
+  .history-table tr:hover td { background: var(--surface2); }
+
+  .dir-tag {
+    font-family: var(--cond);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 3px;
+    letter-spacing: 1px;
+  }
+
+  .dir-tag.buy  { background: rgba(0,212,170,0.15); color: var(--buy); }
+  .dir-tag.sell { background: rgba(255,77,109,0.15); color: var(--sell); }
+
+  /* ── Scan History ── */
+  .scan-history-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .scan-history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--surface2);
+    border-radius: 6px;
+    font-size: 12px;
+  }
+
+  .scan-history-time {
+    font-family: var(--mono);
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .scan-history-result {
+    font-family: var(--cond);
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  .scan-history-result.found  { color: var(--accent); }
+  .scan-history-result.none   { color: var(--muted); }
+
+  /* ── Checklist ── */
+  .checklist { display: flex; flex-direction: column; gap: 10px; }
+
+  .check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface2);
+    border-radius: 6px;
+    border-left: 3px solid var(--border2);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .check-item .num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: bold;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  /* ── Stats ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .stat-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 24px;
+    color: var(--accent);
+    font-weight: bold;
+  }
+
+  .stat-label {
+    font-family: var(--cond);
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* ── Loading spinner ── */
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar       { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .container { grid-template-columns: 1fr; }
+    .side-col  { order: -1; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">📊</div>
+    <div class="logo-text">FOREX<span>EDGE</span></div>
+  </div>
+  <div class="header-right">
+    <div class="utc-clock">UTC <span id="clock">--:--:--</span></div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Main Column -->
+  <div class="main-col">
+
+    <!-- Session Bar -->
+    <div class="session-bar" id="sessionBar">
+      <div class="session-sessions" id="sessionPills">
+        <div class="session-pill" id="pill-tokyo">Tokyo</div>
+        <div class="session-pill" id="pill-london">London</div>
+        <div class="session-pill" id="pill-newyork">New York</div>
+      </div>
+      <div class="session-tip" id="sessionTip">Loading session data...</div>
+      <div class="session-next" id="nextScan">Next scan: --</div>
+    </div>
+
+    <!-- Scan Controls -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Scanner</div>
+        <div class="scan-status idle" id="scanStatus">
+          <span class="dot"></span>
+          <span id="scanStatusText">Ready</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="scan-row">
+          <button class="btn btn-primary" id="scanBtn" onclick="triggerScan()">
+            Run Scan Now
+          </button>
+          <div style="font-size:12px; color: var(--muted);">
+            Scans all 8 pairs · Takes ~64s on free tier
+          </div>
+          <div class="next-scan" id="lastScan">Last scan: never</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Setups -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Live Setups</div>
+        <div style="font-size:12px; color: var(--muted);" id="setupCount">—</div>
+      </div>
+      <div class="card-body" id="setupsContainer">
+        <div class="no-setups">
+          <div class="icon">📡</div>
+          <h3>No Scan Yet</h3>
+          <p>Click "Run Scan Now" to scan all 8 pairs for qualifying setups.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Signal History -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Signal History</div>
+        <div style="font-size:12px; color: var(--muted);">Last 50 signals</div>
+      </div>
+      <div class="card-body" style="padding:0; overflow-x:auto;">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Pair</th>
+              <th>Dir</th>
+              <th>Pattern</th>
+              <th>Level</th>
+              <th>R/R</th>
+              <th>Grade</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr><td colspan="7" style="text-align:center; color:var(--muted); padding:24px;">
+              No history yet — run your first scan
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Side Column -->
+  <div class="side-col">
+
+    <!-- Stats -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Session Stats</div>
+      </div>
+      <div class="card-body">
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-value" id="statScans">0</div>
+            <div class="stat-label">Total Scans</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value" id="statSignals">0</div>
+            <div class="stat-label">Signals Found</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value" id="statBuy">0</div>
+            <div class="stat-label">Buy Signals</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value" id="statSell">0</div>
+            <div class="stat-label">Sell Signals</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scan History -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Scan Log</div>
+      </div>
+      <div class="card-body">
+        <div class="scan-history-list" id="scanHistoryList">
+          <div style="color:var(--muted); font-size:13px; text-align:center; padding:20px 0;">
+            No scans yet
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trade Checklist -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Your Checklist</div>
+      </div>
+      <div class="card-body">
+        <div class="checklist">
+          <div class="check-item">
+            <span class="num">01</span>
+            Price is at a structure level with 2+ touches
+          </div>
+          <div class="check-item">
+            <span class="num">02</span>
+            Candle pattern confirms direction at that level
+          </div>
+          <div class="check-item">
+            <span class="num">03</span>
+            Risk/Reward is at least 1.5:1
+          </div>
+          <div class="check-item">
+            <span class="num">04</span>
+            RSI is not working against the trade
+          </div>
+          <div class="check-item">
+            <span class="num">05</span>
+            I know my entry, stop, and target before clicking
+          </div>
+        </div>
+        <div style="margin-top:14px; padding:10px 12px; background:var(--surface2); border-radius:6px; font-size:12px; color:var(--muted); line-height:1.6;">
+          All 5 checked → take the trade<br>
+          Anything unchecked → walk away
+        </div>
+      </div>
+    </div>
+
+    <!-- Session Guide -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Session Times (CT)</div>
+      </div>
+      <div class="card-body">
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div class="check-item" style="border-left-color: #4db8ff;">
+            <span class="num">🇯🇵</span>
+            Tokyo: 7pm – 4am CT
+          </div>
+          <div class="check-item" style="border-left-color: var(--accent);">
+            <span class="num">🇬🇧</span>
+            London: 3am – 12pm CT
+          </div>
+          <div class="check-item" style="border-left-color: var(--warn);">
+            <span class="num">🇺🇸</span>
+            New York: 8am – 5pm CT
+          </div>
+          <div class="check-item" style="border-left-color: var(--prime);">
+            <span class="num">🔥</span>
+            Best: London/NY overlap 8am–12pm CT
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── Clock ──────────────────────────────────────────────────────────────────
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      now.toUTCString().slice(17, 25);
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // ── Session ────────────────────────────────────────────────────────────────
+  async function updateSession() {
+    try {
+      const r    = await fetch('/api/session');
+      const data = await r.json();
+
+      // Pills
+      const pills = {
+        'Tokyo':    document.getElementById('pill-tokyo'),
+        'London':   document.getElementById('pill-london'),
+        'New York': document.getElementById('pill-newyork'),
+      };
+
+      Object.values(pills).forEach(p => {
+        p.className = 'session-pill';
+      });
+
+      data.active.forEach(s => {
+        if (pills[s]) {
+          pills[s].className = 'session-pill ' +
+            (data.overlap ? 'overlap' : 'active');
+        }
+      });
+
+      // Tip
+      const tip = document.getElementById('sessionTip');
+      tip.textContent  = data.tip;
+      tip.className    = 'session-tip ' + data.quality;
+
+    } catch(e) { console.error('Session error:', e); }
+  }
+
+  setInterval(updateSession, 30000);
+  updateSession();
+
+  // ── Countdown to next scan ─────────────────────────────────────────────────
+  function updateCountdown(nextScanMs) {
+    if (!nextScanMs) return;
+    const el  = document.getElementById('nextScan');
+    const now = Date.now();
+    const diff = Math.max(0, nextScanMs - now);
+    const m    = Math.floor(diff / 60000);
+    const s    = Math.floor((diff % 60000) / 1000);
+    el.textContent = `Auto-scan in ${m}m ${s}s`;
+  }
+
+  // ── Scan Status Polling ────────────────────────────────────────────────────
+  let lastScanTime = null;
+  let isScanning   = false;
+
+  async function pollStatus() {
+    try {
+      const r    = await fetch('/api/scan/status');
+      const data = await r.json();
+
+      const statusEl = document.getElementById('scanStatus');
+      const statusTx = document.getElementById('scanStatusText');
+      const scanBtn  = document.getElementById('scanBtn');
+
+      if (data.status === 'scanning') {
+        statusEl.className   = 'scan-status scanning';
+        statusTx.innerHTML   = '<span class="spinner"></span>Scanning...';
+        scanBtn.disabled     = true;
+        isScanning           = true;
+      } else {
+        statusEl.className   = 'scan-status idle';
+        statusTx.textContent = data.status === 'error' ? 'Error' : 'Ready';
+        scanBtn.disabled     = false;
+
+        if (isScanning && data.status === 'idle') {
+          // Scan just finished — refresh everything
+          isScanning = false;
+          await refreshAll();
+        }
+      }
+
+      if (data.last_scan && data.last_scan !== lastScanTime) {
+        lastScanTime = data.last_scan;
+        const d = new Date(data.last_scan);
+        document.getElementById('lastScan').textContent =
+          'Last scan: ' + d.toLocaleTimeString();
+        renderSetups(data.results || []);
+      }
+
+      updateCountdown(data.next_scan);
+
+    } catch(e) { console.error('Poll error:', e); }
+  }
+
+  setInterval(pollStatus, 3000);
+
+  // ── Trigger Manual Scan ────────────────────────────────────────────────────
+  async function triggerScan() {
+    const btn = document.getElementById('scanBtn');
+    btn.disabled = true;
+
+    const statusEl = document.getElementById('scanStatus');
+    const statusTx = document.getElementById('scanStatusText');
+    statusEl.className   = 'scan-status scanning';
+    statusTx.innerHTML   = '<span class="spinner"></span>Scanning...';
+    isScanning = true;
+
+    try {
+      await fetch('/api/scan/run', { method: 'POST' });
+    } catch(e) {
+      console.error('Scan trigger error:', e);
+    }
+  }
+
+  // ── Render Setups ──────────────────────────────────────────────────────────
+  function renderSetups(results) {
+    const container = document.getElementById('setupsContainer');
+    const countEl   = document.getElementById('setupCount');
+
+    if (!results || results.length === 0) {
+      countEl.textContent = '0 setups';
+      container.innerHTML = `
+        <div class="no-setups">
+          <div class="icon">⏳</div>
+          <h3>No Qualifying Setups</h3>
+          <p>The scanner filtered all pairs — nothing meets all 3 gates right now. This is normal. Run again at the next session open.</p>
+        </div>`;
+      return;
+    }
+
+    countEl.textContent = `${results.length} setup${results.length > 1 ? 's' : ''} found`;
+
+    const gradeClass = (g) => {
+      if (g === 'A+') return 'grade-Aplus';
+      if (g === 'A')  return 'grade-A';
+      if (g === 'B')  return 'grade-B';
+      if (g === 'C')  return 'grade-C';
+      return 'grade-D';
+    };
+
+    const gradeLabel = (g, score) => {
+      const labels = { 'A+': '🔥 Prime', 'A': '✅ Strong', 'B': '👀 Watch', 'C': '⚠️ Weak', 'D': '❌ Skip' };
+      return `${g} — ${labels[g] || ''} (${score}/100)`;
+    };
+
+    const pips = (a, b) => Math.abs((a - b) * 10000).toFixed(1);
+
+    container.innerHTML = `<div class="setups-grid">${results.map(r => `
+      <div class="setup-card ${r.direction.toLowerCase()}">
+        <div class="setup-head">
+          <div class="setup-pair">${r.pair}</div>
+          <div class="setup-dir ${r.direction.toLowerCase()}">${r.direction}</div>
+        </div>
+        <div class="setup-body">
+          <div class="setup-pattern">
+            ${r.pattern}
+            <span class="strength-badge ${r.strength === 'Strong' ? 'strong' : ''}">${r.strength}</span>
+          </div>
+          <div class="setup-levels">
+            <div class="level-box">
+              <div class="level-label">Entry</div>
+              <div class="level-price">${r.current.toFixed(5)}</div>
+              <div class="level-sub">Current price</div>
+            </div>
+            <div class="level-box">
+              <div class="level-label">Structure</div>
+              <div class="level-price">${r.at_level.toFixed(5)}</div>
+              <div class="level-sub">${r.level_strength} · ${r.touches} touches</div>
+            </div>
+            <div class="level-box">
+              <div class="level-label">Stop</div>
+              <div class="level-price">${r.stop.toFixed(5)}</div>
+              <div class="level-sub">${pips(r.stop, r.current)} pips risk</div>
+            </div>
+            <div class="level-box">
+              <div class="level-label">Target</div>
+              <div class="level-price">${r.target ? r.target.toFixed(5) : '—'}</div>
+              <div class="level-sub">${r.target ? pips(r.target, r.current) + ' pips' : '—'}</div>
+            </div>
+          </div>
+          <div class="setup-footer">
+            <div class="grade-badge ${gradeClass(r.grade)}">${gradeLabel(r.grade, r.score)}</div>
+            <div class="rr-label">R/R <span>${r.rr}:1</span></div>
+          </div>
+          <div class="score-bar">
+            <div class="score-fill" style="width:${r.score}%"></div>
+          </div>
+        </div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  // ── Render History ─────────────────────────────────────────────────────────
+  async function loadHistory() {
+    try {
+      const r    = await fetch('/api/signals/history');
+      const data = await r.json();
+      const body = document.getElementById('historyBody');
+
+      if (!data.length) return;
+
+      // Stats
+      document.getElementById('statSignals').textContent = data.length;
+      document.getElementById('statBuy').textContent  = data.filter(d => d.direction === 'BUY').length;
+      document.getElementById('statSell').textContent = data.filter(d => d.direction === 'SELL').length;
+
+      body.innerHTML = data.map(r => {
+        const t = new Date(r.timestamp);
+        const time = t.toLocaleDateString() + ' ' + t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+        return `<tr>
+          <td>${time}</td>
+          <td>${r.pair}</td>
+          <td><span class="dir-tag ${r.direction.toLowerCase()}">${r.direction}</span></td>
+          <td style="color:var(--muted)">${r.pattern}</td>
+          <td style="font-family:var(--mono)">${r.at_level.toFixed(5)}</td>
+          <td>${r.rr}:1</td>
+          <td>${r.grade}</td>
+        </tr>`;
+      }).join('');
+
+    } catch(e) { console.error('History error:', e); }
+  }
+
+  // ── Render Scan Log ────────────────────────────────────────────────────────
+  async function loadScanHistory() {
+    try {
+      const r    = await fetch('/api/scans/history');
+      const data = await r.json();
+      const list = document.getElementById('scanHistoryList');
+      const statScans = document.getElementById('statScans');
+
+      if (!data.length) return;
+      statScans.textContent = data.length;
+
+      list.innerHTML = data.map(s => {
+        const t    = new Date(s.timestamp);
+        const time = t.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        const found = s.setups_found;
+        return `<div class="scan-history-item">
+          <span class="scan-history-time">${time}</span>
+          <span class="scan-history-result ${found > 0 ? 'found' : 'none'}">
+            ${found > 0 ? `${found} setup${found > 1 ? 's' : ''}` : 'No setups'}
+          </span>
+        </div>`;
+      }).join('');
+
+    } catch(e) { console.error('Scan history error:', e); }
+  }
+
+  // ── Refresh All ────────────────────────────────────────────────────────────
+  async function refreshAll() {
+    await Promise.all([loadHistory(), loadScanHistory()]);
+  }
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+  pollStatus();
+  refreshAll();
+  setInterval(refreshAll, 60000);
+</script>
+</body>
+</html>
