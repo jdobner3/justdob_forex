@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, redirect, url_for, session, request
 from dotenv import load_dotenv
 import os
 import sqlite3
@@ -8,12 +8,44 @@ import threading
 from datetime import datetime, timezone
 from twelvedata import TDClient
 import numpy as np
+import msal
 
-# ── Load API key ───────────────────────────────────────────────────────────────
+# ── Load local env file if present ────────────────────────────────────────────
 load_dotenv("twelvedata_apikey.env")
-API_KEY = os.getenv("TWELVE_DATA_API_KEY")
 
 app = Flask(__name__)
+
+# ── Config from environment variables ─────────────────────────────────────────
+API_KEY       = os.getenv("TWELVE_DATA_API_KEY")
+SECRET_KEY    = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+CLIENT_ID     = os.getenv("AZURE_CLIENT_ID")
+CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
+TENANT_ID     = os.getenv("AZURE_TENANT_ID")
+REDIRECT_URI  = os.getenv("REDIRECT_URI", "http://localhost:5000/auth/callback")
+
+app.secret_key = SECRET_KEY
+
+# ── Microsoft Auth Config ──────────────────────────────────────────────────────
+AUTHORITY     = f"https://login.microsoftonline.com/{TENANT_ID}"
+SCOPES        = ["User.Read"]
+
+def get_msal_app():
+    return msal.ConfidentialClientApplication(
+        CLIENT_ID,
+        authority=AUTHORITY,
+        client_credential=CLIENT_SECRET,
+    )
+
+# ── Auth helpers ───────────────────────────────────────────────────────────────
+def login_required(f):
+    """Decorator — redirect to login if not authenticated."""
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user"):
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
 
 # ── Settings ───────────────────────────────────────────────────────────────────
 PAIRS = [
@@ -54,11 +86,11 @@ def init_db():
     """)
     c.execute("""
         CREATE TABLE IF NOT EXISTS scans (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp   TEXT,
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp     TEXT,
             pairs_scanned INTEGER,
             setups_found  INTEGER,
-            results     TEXT
+            results       TEXT
         )
     """)
     conn.commit()
@@ -68,12 +100,10 @@ def save_scan(results):
     conn = sqlite3.connect(DB_PATH)
     c    = conn.cursor()
     ts   = datetime.now(timezone.utc).isoformat()
-
     c.execute("""
         INSERT INTO scans (timestamp, pairs_scanned, setups_found, results)
         VALUES (?, ?, ?, ?)
     """, (ts, len(PAIRS), len(results), json.dumps(results)))
-
     for r in results:
         c.execute("""
             INSERT INTO signals
@@ -85,7 +115,6 @@ def save_scan(results):
             r["at_level"], r["touches"], r["current"], r.get("target"),
             r["stop"], r["rr"], r["rsi"], r["score"], r["grade"]
         ))
-
     conn.commit()
     conn.close()
 
@@ -337,30 +366,27 @@ def run_scan():
     save_scan(results)
     return results
 
-# ── Scan State (shared between threads) ───────────────────────────────────────
+# ── Scan State ─────────────────────────────────────────────────────────────────
 scan_state = {
-    "status":      "idle",
-    "last_scan":   None,
-    "results":     [],
-    "next_scan":   None,
+    "status":    "idle",
+    "last_scan": None,
+    "results":   [],
+    "next_scan": None,
 }
 
 def background_scanner():
-    """Runs a scan every hour, aligned to the top of the hour."""
     while True:
-        now  = datetime.now(timezone.utc)
-        # Wait until next top of hour
+        now       = datetime.now(timezone.utc)
         mins_left = 60 - now.minute
         secs_left = mins_left * 60 - now.second
-        scan_state["next_scan"] = (now.replace(
-            minute=0, second=0, microsecond=0
-        ).timestamp() + 3600) * 1000  # ms for JS
+        scan_state["next_scan"] = (
+            now.replace(minute=0, second=0, microsecond=0).timestamp() + 3600
+        ) * 1000
 
-        print(f"[Scanner] Next scan in {mins_left}m {now.second}s")
-        time.sleep(max(secs_left, 60))  # wait until top of hour
+        print(f"[Scanner] Next scan in {mins_left}m")
+        time.sleep(max(secs_left, 60))
 
         scan_state["status"] = "scanning"
-        print(f"[Scanner] Running scan at {datetime.now(timezone.utc).isoformat()}")
         try:
             results = run_scan()
             scan_state["results"]   = results
@@ -371,14 +397,59 @@ def background_scanner():
             scan_state["status"] = "error"
             print(f"[Scanner] Error: {e}")
 
-# ── Flask Routes ───────────────────────────────────────────────────────────────
+# ── Auth Routes ────────────────────────────────────────────────────────────────
+@app.route("/login")
+def login():
+    msal_app = get_msal_app()
+    auth_url = msal_app.get_authorization_request_url(
+        scopes=SCOPES,
+        redirect_uri=REDIRECT_URI,
+    )
+    return redirect(auth_url)
+
+@app.route("/auth/callback")
+def auth_callback():
+    code = request.args.get("code")
+    if not code:
+        return "Authentication failed — no code returned.", 400
+
+    msal_app = get_msal_app()
+    result   = msal_app.acquire_token_by_authorization_code(
+        code,
+        scopes=SCOPES,
+        redirect_uri=REDIRECT_URI,
+    )
+
+    if "error" in result:
+        return f"Authentication error: {result.get('error_description')}", 400
+
+    # Store user info in session
+    session["user"] = {
+        "name":  result.get("id_token_claims", {}).get("name", "Trader"),
+        "email": result.get("id_token_claims", {}).get("preferred_username", ""),
+    }
+
+    return redirect(url_for("dashboard"))
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    # Redirect to Microsoft logout then back to login
+    logout_url = (
+        f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/logout"
+        f"?post_logout_redirect_uri={url_for('login', _external=True)}"
+    )
+    return redirect(logout_url)
+
+# ── Main Routes ────────────────────────────────────────────────────────────────
 @app.route("/")
+@login_required
 def dashboard():
-    return render_template("dashboard.html")
+    return render_template("dashboard.html", user=session.get("user"))
 
 @app.route("/api/scan/run", methods=["POST"])
+@login_required
 def api_run_scan():
-    """Manual scan trigger from dashboard."""
     if scan_state["status"] == "scanning":
         return jsonify({"error": "Scan already running"}), 429
     scan_state["status"] = "scanning"
@@ -395,6 +466,7 @@ def api_run_scan():
     return jsonify({"status": "started"})
 
 @app.route("/api/scan/status")
+@login_required
 def api_scan_status():
     return jsonify({
         "status":    scan_state["status"],
@@ -404,72 +476,50 @@ def api_scan_status():
     })
 
 @app.route("/api/signals/history")
+@login_required
 def api_signal_history():
     return jsonify(get_recent_signals(50))
 
 @app.route("/api/scans/history")
+@login_required
 def api_scans_history():
     return jsonify(get_scan_history(20))
 
 @app.route("/api/session")
+@login_required
 def api_session():
-    """Returns current trading session info."""
     now_utc = datetime.now(timezone.utc)
     hour    = now_utc.hour
-    minute  = now_utc.minute
+    active  = []
 
-    sessions = []
-    active   = []
+    if 0 <= hour < 9:   active.append("Tokyo")
+    if 8 <= hour < 17:  active.append("London")
+    if 13 <= hour < 22: active.append("New York")
 
-    # Tokyo: 00:00 - 09:00 UTC
-    if 0 <= hour < 9:
-        active.append("Tokyo")
-    # London: 08:00 - 17:00 UTC
-    if 8 <= hour < 17:
-        active.append("London")
-    # New York: 13:00 - 22:00 UTC
-    if 13 <= hour < 22:
-        active.append("New York")
-
-    # Overlaps
     overlap = None
     if "London" in active and "Tokyo" in active:
         overlap = "Tokyo/London Overlap — High Volatility"
     if "London" in active and "New York" in active:
         overlap = "London/New York Overlap — PEAK Volatility 🔥"
 
-    # Best time to trade?
     if overlap:
-        quality = "prime"
-        tip     = overlap
+        quality, tip = "prime", overlap
     elif active:
-        quality = "good"
-        tip     = f"{' + '.join(active)} session active"
+        quality, tip = "good", f"{' + '.join(active)} session active"
     else:
-        quality = "quiet"
-        tip     = "All sessions closed — low liquidity, avoid trading"
-
-    # Next session open
-    next_open = None
-    if hour >= 22 or hour < 0:
-        next_open = "Tokyo opens at midnight UTC"
-    elif 9 <= hour < 8:
-        next_open = "London opens at 08:00 UTC"
+        quality, tip = "quiet", "All sessions closed — low liquidity, avoid trading"
 
     return jsonify({
-        "utc_time":    now_utc.strftime("%H:%M UTC"),
-        "active":      active,
-        "overlap":     overlap,
-        "quality":     quality,
-        "tip":         tip,
-        "next_open":   next_open,
-        "pairs":       len(PAIRS),
+        "utc_time": now_utc.strftime("%H:%M UTC"),
+        "active":   active,
+        "overlap":  overlap,
+        "quality":  quality,
+        "tip":      tip,
     })
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     init_db()
-    # Start background scanner thread
     scanner_thread = threading.Thread(target=background_scanner, daemon=True)
     scanner_thread.start()
     print("\n" + "="*55)

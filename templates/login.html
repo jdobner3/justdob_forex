@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forex Dashboard — Sign In</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #080c10;
+    --surface: #0d1117;
+    --border:  #1e2d3d;
+    --text:    #cdd9e5;
+    --muted:   #6e8099;
+    --accent:  #00d4aa;
+    --accent2: #0099ff;
+    --mono:    'Share Tech Mono', monospace;
+    --cond:    'Barlow Condensed', sans-serif;
+    --sans:    'Barlow', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  /* Glow orb */
+  body::after {
+    content: '';
+    position: fixed;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(0,212,170,0.06) 0%, transparent 70%);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .login-card {
+    position: relative;
+    z-index: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 48px 40px;
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    animation: slideUp 0.5s ease forwards;
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .logo-icon {
+    width: 56px;
+    height: 56px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin: 0 auto 20px;
+    box-shadow: 0 8px 24px rgba(0,212,170,0.2);
+  }
+
+  .logo-text {
+    font-family: var(--cond);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+
+  .logo-text span { color: var(--accent); }
+
+  .tagline {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 40px;
+    font-family: var(--mono);
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin-bottom: 32px;
+  }
+
+  .sign-in-label {
+    font-family: var(--cond);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  .ms-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    padding: 14px 24px;
+    background: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 500;
+    color: #1a1a1a;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  .ms-btn:hover {
+    background: #f0f0f0;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+
+  .ms-btn:active {
+    transform: translateY(0);
+  }
+
+  /* Microsoft logo SVG */
+  .ms-logo {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+
+  .footer-note {
+    margin-top: 28px;
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .footer-note span {
+    color: var(--accent);
+  }
+
+  /* Scan line effect */
+  .login-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.015) 2px,
+      rgba(0,0,0,0.015) 4px
+    );
+    border-radius: 16px;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="logo-icon">📊</div>
+  <div class="logo-text">FOREX<span>EDGE</span></div>
+  <div class="tagline">Personal Trading Dashboard</div>
+  <div class="divider"></div>
+  <div class="sign-in-label">Sign in to continue</div>
+
+  <a href="/login" class="ms-btn">
+    <!-- Official Microsoft logo -->
+    <svg class="ms-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21">
+      <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+      <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+      <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+      <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+    </svg>
+    Sign in with Microsoft
+  </a>
+
+  <div class="footer-note">
+    Access restricted to <span>Valley Fastener Group</span> accounts.<br>
+    Your credentials are never stored by this app.
+  </div>
+</div>
+
+</body>
+</html>
