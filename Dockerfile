@@ -15,7 +15,7 @@ COPY . .
 RUN mkdir -p /app/data
 
 # ── Expose port ─────────────────────────────────────────────
-EXPOSE 3008
+EXPOSE 3009
 
 # ── Start the app ───────────────────────────────────────────
 CMD ["gunicorn", "--workers", "1", "--bind", "0.0.0.0:3008", "app:app"]
