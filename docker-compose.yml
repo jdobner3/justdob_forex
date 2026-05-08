@@ -6,7 +6,7 @@ services:
     container_name: forex-dashboard
     restart: unless-stopped
     ports:
-      - "3008:3008"
+      - "3009:3008"
     volumes:
       # Persists SQLite database outside the container
       # Your signal history survives restarts and updates
