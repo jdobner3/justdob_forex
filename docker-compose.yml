@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  forex-dashboard:
+    build: .
+    container_name: forex-dashboard
+    restart: unless-stopped
+    ports:
+      - "3008:3008"
+    volumes:
+      # Persists SQLite database outside the container
+      # Your signal history survives restarts and updates
+      - /mnt/user/appdata/forex-dashboard:/app/data
+    environment:
+      - TWELVE_DATA_API_KEY=${TWELVE_DATA_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_PATH=/app/data/forex.db

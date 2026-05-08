@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, redirect, url_for, session, request
+from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 import os
 import sqlite3
@@ -8,80 +8,56 @@ import threading
 from datetime import datetime, timezone
 from twelvedata import TDClient
 import numpy as np
-import msal
 
-# ── Load local env file if present ────────────────────────────────────────────
+# ── Load env ───────────────────────────────────────────────────────────────────
+load_dotenv(".env")
 load_dotenv("twelvedata_apikey.env")
 
 app = Flask(__name__)
 
-# ── Config from environment variables ─────────────────────────────────────────
-API_KEY       = os.getenv("TWELVE_DATA_API_KEY")
-SECRET_KEY    = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
-CLIENT_ID     = os.getenv("AZURE_CLIENT_ID")
-CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
-TENANT_ID     = os.getenv("AZURE_TENANT_ID")
-REDIRECT_URI  = os.getenv("REDIRECT_URI", "http://localhost:5000/auth/callback")
-
-app.secret_key = SECRET_KEY
-
-# ── Microsoft Auth Config ──────────────────────────────────────────────────────
-AUTHORITY     = f"https://login.microsoftonline.com/{TENANT_ID}"
-SCOPES        = ["User.Read"]
-
-def get_msal_app():
-    return msal.ConfidentialClientApplication(
-        CLIENT_ID,
-        authority=AUTHORITY,
-        client_credential=CLIENT_SECRET,
-    )
-
-# ── Auth helpers ───────────────────────────────────────────────────────────────
-def login_required(f):
-    """Decorator — redirect to login if not authenticated."""
-    from functools import wraps
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not session.get("user"):
-            return redirect(url_for("login"))
-        return f(*args, **kwargs)
-    return decorated
+# ── Config ─────────────────────────────────────────────────────────────────────
+API_KEY        = os.getenv("TWELVE_DATA_API_KEY")
+app.secret_key = os.getenv("SECRET_KEY", "forex-dev-secret")
+DB_PATH        = os.getenv("DB_PATH", "forex.db")
 
 # ── Settings ───────────────────────────────────────────────────────────────────
 PAIRS = [
     "EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF",
     "AUD/USD", "USD/CAD", "NZD/USD", "EUR/GBP",
 ]
-INTERVAL         = "1h"
-BARS             = 100
-ZONE_TOLERANCE   = 0.00030
-LEVEL_PROXIMITY  = 0.00100
-MIN_TOUCHES      = 2
-MIN_RR           = 1.5
-API_DELAY        = 8
-DB_PATH          = "forex.db"
+INTERVAL        = "1h"
+BARS            = 100
+ZONE_TOLERANCE  = 0.00030
+LEVEL_PROXIMITY = 0.00100
+MIN_TOUCHES     = 2
+MIN_RR          = 1.5
+API_DELAY       = 8
 
 # ── Database ───────────────────────────────────────────────────────────────────
 def init_db():
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+
     conn = sqlite3.connect(DB_PATH)
     c    = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS signals (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp   TEXT,
-            pair        TEXT,
-            direction   TEXT,
-            pattern     TEXT,
-            strength    TEXT,
-            at_level    REAL,
-            touches     INTEGER,
-            current     REAL,
-            target      REAL,
-            stop        REAL,
-            rr          REAL,
-            rsi         REAL,
-            score       INTEGER,
-            grade       TEXT
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            pair      TEXT,
+            direction TEXT,
+            pattern   TEXT,
+            strength  TEXT,
+            at_level  REAL,
+            touches   INTEGER,
+            current   REAL,
+            target    REAL,
+            stop      REAL,
+            rr        REAL,
+            rsi       REAL,
+            score     INTEGER,
+            grade     TEXT
         )
     """)
     c.execute("""
@@ -141,7 +117,8 @@ def get_scan_history(limit=20):
     """, (limit,))
     rows = c.fetchall()
     conn.close()
-    return [{"timestamp": r[0], "pairs_scanned": r[1], "setups_found": r[2]} for r in rows]
+    return [{"timestamp": r[0], "pairs_scanned": r[1], "setups_found": r[2]}
+            for r in rows]
 
 # ── Scanner Engine ─────────────────────────────────────────────────────────────
 def find_swing_highs(high_series, lookback=3):
@@ -292,9 +269,11 @@ def run_scan():
             patterns = detect_patterns(open_, close, high, low, idx=-1)
 
             near_res = next(((p, s) for p, s in res_zones
-                             if abs(current - p) <= LEVEL_PROXIMITY and p > current), None)
+                             if abs(current - p) <= LEVEL_PROXIMITY
+                             and p > current), None)
             near_sup = next(((p, s) for p, s in sup_zones
-                             if abs(current - p) <= LEVEL_PROXIMITY and p < current), None)
+                             if abs(current - p) <= LEVEL_PROXIMITY
+                             and p < current), None)
 
             best_score  = 0
             best_signal = None
@@ -397,58 +376,12 @@ def background_scanner():
             scan_state["status"] = "error"
             print(f"[Scanner] Error: {e}")
 
-# ── Auth Routes ────────────────────────────────────────────────────────────────
-@app.route("/login")
-def login():
-    msal_app = get_msal_app()
-    auth_url = msal_app.get_authorization_request_url(
-        scopes=SCOPES,
-        redirect_uri=REDIRECT_URI,
-    )
-    return redirect(auth_url)
-
-@app.route("/auth/callback")
-def auth_callback():
-    code = request.args.get("code")
-    if not code:
-        return "Authentication failed — no code returned.", 400
-
-    msal_app = get_msal_app()
-    result   = msal_app.acquire_token_by_authorization_code(
-        code,
-        scopes=SCOPES,
-        redirect_uri=REDIRECT_URI,
-    )
-
-    if "error" in result:
-        return f"Authentication error: {result.get('error_description')}", 400
-
-    # Store user info in session
-    session["user"] = {
-        "name":  result.get("id_token_claims", {}).get("name", "Trader"),
-        "email": result.get("id_token_claims", {}).get("preferred_username", ""),
-    }
-
-    return redirect(url_for("dashboard"))
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    # Redirect to Microsoft logout then back to login
-    logout_url = (
-        f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/logout"
-        f"?post_logout_redirect_uri={url_for('login', _external=True)}"
-    )
-    return redirect(logout_url)
-
-# ── Main Routes ────────────────────────────────────────────────────────────────
+# ── Routes ─────────────────────────────────────────────────────────────────────
 @app.route("/")
-@login_required
 def dashboard():
-    return render_template("dashboard.html", user=session.get("user"))
+    return render_template("dashboard.html")
 
 @app.route("/api/scan/run", methods=["POST"])
-@login_required
 def api_run_scan():
     if scan_state["status"] == "scanning":
         return jsonify({"error": "Scan already running"}), 429
@@ -466,7 +399,6 @@ def api_run_scan():
     return jsonify({"status": "started"})
 
 @app.route("/api/scan/status")
-@login_required
 def api_scan_status():
     return jsonify({
         "status":    scan_state["status"],
@@ -476,17 +408,14 @@ def api_scan_status():
     })
 
 @app.route("/api/signals/history")
-@login_required
 def api_signal_history():
     return jsonify(get_recent_signals(50))
 
 @app.route("/api/scans/history")
-@login_required
 def api_scans_history():
     return jsonify(get_scan_history(20))
 
 @app.route("/api/session")
-@login_required
 def api_session():
     now_utc = datetime.now(timezone.utc)
     hour    = now_utc.hour
@@ -524,6 +453,7 @@ if __name__ == "__main__":
     scanner_thread.start()
     print("\n" + "="*55)
     print("  📊 Forex Dashboard running!")
-    print("  Open your browser to: http://localhost:5000")
+    print("  Open your browser to: http://localhost:3008")
+    print("  On your network:      http://192.168.1.100:3008")
     print("="*55 + "\n")
-    app.run(debug=False, port=5000, use_reloader=False)
+    app.run(debug=False, port=3008, use_reloader=False)
